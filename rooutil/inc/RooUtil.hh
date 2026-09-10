@@ -278,6 +278,19 @@ namespace rooutil {
       if(event->trkhitcalibs) { output_ntuple->Branch("trkhitcalibs", event->trkhitcalibs); }
 
       if(event->timeclusters) { output_ntuple->Branch("timeclusters", event->timeclusters); }
+      if(event->lineseeds) { output_ntuple->Branch("lineseeds", event->lineseeds); }
+
+      // Re-emit every other discovered time cluster / line seed collection under its own name (the
+      // conventional "timeclusters"/"lineseeds" branches are already written above via the
+      // dedicated pointers; skip them here to avoid branching the same name twice).
+      for (const auto& branch : event->timecluster_branches) {
+        if (branch.first == "timeclusters") continue;
+        if (branch.second) { output_ntuple->Branch(branch.first.c_str(), branch.second); }
+      }
+      for (const auto& branch : event->lineseed_branches) {
+        if (branch.first == "lineseeds") continue;
+        if (branch.second) { output_ntuple->Branch(branch.first.c_str(), branch.second); }
+      }
 
       if(event->caloclusters) { output_ntuple->Branch("caloclusters", event->caloclusters); }
       if(event->calohits) { output_ntuple->Branch("calohits", event->calohits); }

@@ -2,6 +2,7 @@
 #define Event_hh_
 
 #include <algorithm>
+#include <map>
 #include <cxxabi.h> // For abi::__cxa_demangle
 
 #include "EventNtuple/inc/EventInfo.hh"
@@ -44,6 +45,7 @@
 #include "EventNtuple/rooutil/inc/Track.hh"
 #include "EventNtuple/rooutil/inc/UserBranch.hh"
 #include "EventNtuple/rooutil/inc/TimeCluster.hh"
+#include "EventNtuple/rooutil/inc/LineSeed.hh"
 #include "EventNtuple/rooutil/inc/CrvCoinc.hh"
 #include "EventNtuple/rooutil/inc/CaloCluster.hh"
 #include "EventNtuple/rooutil/inc/Trigger.hh"
@@ -88,6 +90,25 @@ namespace rooutil {
       CheckForBranch(ntuple, "trkhitcalibs", &this->trkhitcalibs);
 
       CheckForBranch(ntuple, "timeclusters", &this->timeclusters);
+      CheckForBranch(ntuple, "lineseeds", &this->lineseeds);
+
+      // Discover every time cluster / line seed collection by branch class, however it is named
+      // (Run1B ships several: "timeclusters", "protontimeclusters", "tztimeclusters", ...). The
+      // conventional "timeclusters"/"lineseeds" branches above already own a dedicated pointer
+      // member; reserve their map slot here too so they show up in *CollectionNames(), and alias
+      // them into the map (rather than re-binding) in Update().
+      for (const auto& name : FindBranchesOfClass(ntuple, "vector<mu2e::EventNtupleTimeClusterInfo>")) {
+        timecluster_branches[name] = nullptr; // reserve a stable map slot before taking its address
+        if (name != "timeclusters") {
+          ntuple->SetBranchAddress(name.c_str(), &timecluster_branches[name]);
+        }
+      }
+      for (const auto& name : FindBranchesOfClass(ntuple, "vector<mu2e::LineSeedInfo>")) {
+        lineseed_branches[name] = nullptr;
+        if (name != "lineseeds") {
+          ntuple->SetBranchAddress(name.c_str(), &lineseed_branches[name]);
+        }
+      }
 
       CheckForBranch(ntuple, "caloclusters", &this->caloclusters);
       CheckForBranch(ntuple, "calohits", &this->calohits);
@@ -175,6 +196,36 @@ namespace rooutil {
         }
       }
 
+      if (lineseeds != nullptr) {
+        if (debug) { std::cout << "Event::Update(): Clearing previous LineSeeds... " << std::endl; }
+        line_seeds.clear();
+        for (int i_seed = 0; i_seed < nLineSeeds(); ++i_seed) {
+          if (debug) { std::cout << "Event::Update(): Creating LineSeed " << i_seed << "... " << std::endl; }
+          LineSeed line_seed(&(lineseeds->at(i_seed))); // passing the addresses of the underlying structs
+          line_seeds.emplace_back(line_seed);
+        }
+      }
+
+      // Rebuild the named-collection wrappers. The conventional branches are aliased in here (their
+      // pointer is already refreshed by ROOT via SetBranchAddress on this->timeclusters/lineseeds).
+      if (timeclusters != nullptr) timecluster_branches["timeclusters"] = timeclusters;
+      for (auto& entry : timecluster_branches) {
+        auto& wrapped = named_time_clusters[entry.first];
+        wrapped.clear();
+        if (entry.second != nullptr) {
+          for (auto& tc : *(entry.second)) { wrapped.emplace_back(TimeCluster(&tc)); }
+        }
+      }
+
+      if (lineseeds != nullptr) lineseed_branches["lineseeds"] = lineseeds;
+      for (auto& entry : lineseed_branches) {
+        auto& wrapped = named_line_seeds[entry.first];
+        wrapped.clear();
+        if (entry.second != nullptr) {
+          for (auto& ls : *(entry.second)) { wrapped.emplace_back(LineSeed(&ls)); }
+        }
+      }
+
       if (caloclusters != nullptr) {
         if (debug) { std::cout << "Event::Update(): Clearing previous CaloClusters... " << std::endl; }
         calo_clusters.clear();
@@ -252,6 +303,10 @@ namespace rooutil {
     int nTimeClusters() const {
       if (timeclusters == nullptr) { return 0; }
       else { return timeclusters->size(); }
+    }
+    int nLineSeeds() const {
+      if (lineseeds == nullptr) { return 0; }
+      else { return lineseeds->size(); }
     }
     int nCaloClusters() const {
       if (caloclusters == nullptr) { return 0; }
@@ -353,6 +408,38 @@ namespace rooutil {
       }
     }
 
+    const LineSeeds& GetLineSeeds() { return line_seeds; }
+    LineSeeds GetLineSeeds(LineSeedCut cut, bool inplace = false) {
+      if (!inplace) { // if we are not changing inplace, then just create a new vector to return
+        LineSeeds select_line_seeds;
+        for (auto& line_seed : line_seeds) {
+          if (cut(line_seed)) {
+            select_line_seeds.emplace_back(line_seed);
+          }
+        }
+        return select_line_seeds;
+      }
+      else {
+        auto newEnd = std::remove_if(line_seeds.begin(), line_seeds.end(), [cut](LineSeed& line_seed) { return !cut(line_seed); });
+
+        std::vector<size_t> line_seeds_to_remove;
+        for (std::vector<LineSeed>::iterator i_line_seed = newEnd; i_line_seed != line_seeds.end(); ++i_line_seed) { // now need to remove from event
+          for (size_t i_seed = 0; i_seed < lineseeds->size(); ++i_seed) {
+            if (&(lineseeds->at(i_seed))  == i_line_seed->lineseed) {
+              line_seeds_to_remove.emplace_back(i_seed);
+              // flag i_seed for remoavel
+            }
+          }
+        }
+        for (int i_seed = line_seeds_to_remove.size()-1; i_seed >= 0; --i_seed) {
+          lineseeds->erase(lineseeds->begin()+line_seeds_to_remove[i_seed]);
+        }
+
+        line_seeds.erase(newEnd, line_seeds.end()); // remove only rearranges and returns the new end
+        return line_seeds;
+      }
+    }
+
     const CaloClusters& GetCaloClusters() { return calo_clusters; }
     CaloClusters GetCaloClusters(CaloClusterCut cut, bool inplace = false) {
       if (!inplace) { // if we are not changing inplace, then just create a new vector to return
@@ -407,11 +494,57 @@ namespace rooutil {
       return select_calo_clusters.size();
     }
 
+    int CountLineSeeds() { return line_seeds.size(); }
+    int CountLineSeeds(LineSeedCut cut) {
+      LineSeeds select_line_seeds = GetLineSeeds(cut);
+      return select_line_seeds.size();
+    }
+
+    //-------------------------------------------------
+    // Named time cluster / line seed collections (discovered automatically by branch class; see
+    // the constructor). The conventional "timeclusters"/"lineseeds" branches are available both
+    // through these by-name accessors and through the dedicated members/accessors above.
+
+    std::vector<std::string> TimeClusterCollectionNames() const {
+      // Read from timecluster_branches (populated in the constructor), not named_time_clusters
+      // (only populated once Update() has run), so collection names are available immediately.
+      std::vector<std::string> names;
+      for (const auto& entry : timecluster_branches) { names.push_back(entry.first); }
+      return names;
+    }
+    bool HasTimeClusters(const std::string& name) const {
+      // Read from the constructor-populated map so availability can be checked before the first
+      // Update() (e.g. right after opening the file, to decide what to book histograms for).
+      return timecluster_branches.find(name) != timecluster_branches.end();
+    }
+    const TimeClusters& GetTimeClusters(const std::string& name) const {
+      static const TimeClusters empty;
+      const auto found = named_time_clusters.find(name);
+      return (found != named_time_clusters.end()) ? found->second : empty;
+    }
+
+    std::vector<std::string> LineSeedCollectionNames() const {
+      // See TimeClusterCollectionNames() above -- read from the constructor-populated map.
+      std::vector<std::string> names;
+      for (const auto& entry : lineseed_branches) { names.push_back(entry.first); }
+      return names;
+    }
+    bool HasLineSeeds(const std::string& name) const {
+      // See HasTimeClusters() above.
+      return lineseed_branches.find(name) != lineseed_branches.end();
+    }
+    const LineSeeds& GetLineSeeds(const std::string& name) const {
+      static const LineSeeds empty;
+      const auto found = named_line_seeds.find(name);
+      return (found != named_line_seeds.end()) ? found->second : empty;
+    }
+
 
     Tracks tracks;
     CrvCoincs crv_coincs;
     CaloClusters calo_clusters;
     TimeClusters time_clusters;
+    LineSeeds line_seeds;
 
     // Pointers to the data
     mu2e::EventInfo* evtinfo = nullptr;
@@ -441,6 +574,14 @@ namespace rooutil {
     std::vector<std::shared_ptr<UserBranchBase>> user_branches;
 
     std::vector<mu2e::EventNtupleTimeClusterInfo>* timeclusters = nullptr;
+    std::vector<mu2e::LineSeedInfo>* lineseeds = nullptr;
+
+    // Every time cluster / line seed branch found by class, keyed by output branch name
+    // (includes "timeclusters"/"lineseeds", aliased to the pointers above in Update()).
+    std::map<std::string, std::vector<mu2e::EventNtupleTimeClusterInfo>*> timecluster_branches;
+    std::map<std::string, std::vector<mu2e::LineSeedInfo>*> lineseed_branches;
+    std::map<std::string, TimeClusters> named_time_clusters;
+    std::map<std::string, LineSeeds> named_line_seeds;
 
     std::vector<mu2e::CaloClusterInfo>* caloclusters = nullptr;
     std::vector<mu2e::CaloHitInfo>* calohits = nullptr;

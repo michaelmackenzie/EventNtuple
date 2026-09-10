@@ -480,6 +480,17 @@ void create_val_file_rooutil(std::string filename, std::string outfilename) {
   TH1* h_timeclusters_ecalo      = new TH1F("h_timeclusters_ecalo"     , "", 100,     0.,  200.);
   TH1* h_timeclusters_tcalo      = new TH1F("h_timeclusters_tcalo"     , "", 100,     0., 2000.);
 
+  TH1* h_lineseeds_status     = new TH1F("h_lineseeds_status"    , "",  10,    -2.,    8.);
+  TH1* h_lineseeds_nhits      = new TH1F("h_lineseeds_nhits"     , "", 100,     0.,  200.);
+  TH1* h_lineseeds_nStrawHits = new TH1F("h_lineseeds_nStrawHits", "", 100,     0.,  200.);
+  TH1* h_lineseeds_t0         = new TH1F("h_lineseeds_t0"        , "", 100,     0., 2000.);
+  TH1* h_lineseeds_d0         = new TH1F("h_lineseeds_d0"        , "", 100, -1000., 1000.);
+  TH1* h_lineseeds_phi0       = new TH1F("h_lineseeds_phi0"      , "", 100,    -4.,    4.);
+  TH1* h_lineseeds_z0         = new TH1F("h_lineseeds_z0"        , "", 100, -5000., 5000.);
+  TH1* h_lineseeds_cos        = new TH1F("h_lineseeds_cos"       , "", 100,    -1.,    1.);
+  TH1* h_lineseeds_ecalo      = new TH1F("h_lineseeds_ecalo"     , "", 100,     0.,  200.);
+  TH1* h_lineseeds_tcalo      = new TH1F("h_lineseeds_tcalo"     , "", 100,     0., 2000.);
+
   TH1F* h_caloclusters_diskID_ = new TH1F("h_caloclusters_diskID_", "", 2,0,2);
   TH1F* h_caloclusters_time_ = new TH1F("h_caloclusters_time_", "", 200,0,2000);
   TH1F* h_caloclusters_timeErr_ = new TH1F("h_caloclusters_timeErr_", "", 100,0,100);
@@ -1166,6 +1177,22 @@ void create_val_file_rooutil(std::string filename, std::string outfilename) {
         h_timeclusters_posZ      ->Fill(cluster.pos.z()   );
         h_timeclusters_ecalo     ->Fill(cluster.ecalo     );
         h_timeclusters_tcalo     ->Fill(cluster.tcalo     );
+      }
+    }
+
+    if (event.lineseeds != nullptr) {
+      std::cout << "Creating lineseeds histograms..." << std::endl;
+      for (const auto& seed : *(event.lineseeds)) {
+        h_lineseeds_status     ->Fill(seed.status    );
+        h_lineseeds_nhits      ->Fill(seed.nhits      );
+        h_lineseeds_nStrawHits ->Fill(seed.nStrawHits );
+        h_lineseeds_t0         ->Fill(seed.t0         );
+        h_lineseeds_d0         ->Fill(seed.d0         );
+        h_lineseeds_phi0       ->Fill(seed.phi0       );
+        h_lineseeds_z0         ->Fill(seed.z0         );
+        h_lineseeds_cos        ->Fill(seed.cos        );
+        h_lineseeds_ecalo      ->Fill(seed.ecalo      );
+        h_lineseeds_tcalo      ->Fill(seed.tcalo      );
       }
     }
 
