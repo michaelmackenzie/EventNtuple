@@ -11,6 +11,7 @@
 #include "Offline/TrackerGeom/inc/Tracker.hh"
 #include "Offline/CalorimeterGeom/inc/Calorimeter.hh"
 #include "Offline/CalorimeterGeom/inc/Crystal.hh"
+#include "Offline/CaloCluster/inc/ClusterUtils.hh"
 #include "Offline/DataProducts/inc/CaloConst.hh"
 #include <cmath>
 #include <limits>
@@ -565,6 +566,18 @@ namespace mu2e {
     clusterinfo.cog_ = ccptr.cog3Vector();
     clusterinfo.size_ = ccptr.size();
     clusterinfo.isSplit_ = ccptr.isSplit();
+    
+    // Compute energy moments if cluster has hits
+    if (!ccptr.caloHitsPtrVector().empty()) {
+      auto cal = GeomHandle<Calorimeter>();
+      ClusterUtils clusterUtils(*cal, ccptr);
+      clusterinfo.secondMoment_ = clusterUtils.secondMoment();
+      clusterinfo.e1_ = clusterUtils.e1();
+      clusterinfo.e2_ = clusterUtils.e2();
+      clusterinfo.e9_ = clusterUtils.e9();
+      clusterinfo.e25_ = clusterUtils.e25();
+    }
+    
     clusterinfos.push_back(clusterinfo);
   }
 
