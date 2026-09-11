@@ -68,6 +68,7 @@ namespace rooutil {
 
       // Check if the MC branches exist
       CheckForBranch(ntuple, "evtinfomc", &this->evtinfomc);
+      CheckForBranch(ntuple, "primary", &this->primary);
       CheckForBranch(ntuple, "crvsummarymc", &this->crvsummarymc);
       CheckForBranch(ntuple, "trkmc", &this->trkmc);
       CheckForBranch(ntuple, "trksegsmc", &this->trksegsmc);
@@ -416,6 +417,7 @@ namespace rooutil {
     // Pointers to the data
     mu2e::EventInfo* evtinfo = nullptr;
     mu2e::EventInfoMC* evtinfomc = nullptr;
+    std::vector<mu2e::SimInfo>* primary = nullptr;
     mu2e::HitCount* hitcount = nullptr;
     mu2e::CrvSummaryReco* crvsummary = nullptr;
     mu2e::CrvSummaryMC* crvsummarymc = nullptr;

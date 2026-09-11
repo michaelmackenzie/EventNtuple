@@ -1116,9 +1116,10 @@ namespace mu2e {
 
       // fill primary particle info
       if(_pph.isValid()) {
-        for(auto sim : _pph->primarySimParticles()) {
+        for(const auto& sim : _pph->primarySimParticles()) {
           SimInfo info;
           _infoMCStructHelper.fillSimInfo(sim, info);
+          info.index = _primaryInfos.size();
           _primaryInfos.emplace_back(info);
         }
       }
