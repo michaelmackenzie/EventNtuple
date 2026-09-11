@@ -465,6 +465,8 @@ namespace mu2e {
       // event weights
       std::vector<art::Handle<EventWeight> > _wtHandles;
       EventWeightInfo _wtinfo;
+      // primary particle branch
+      std::vector<SimInfo> _primaryInfos;
       // Calorimeter
       art::Handle<CaloClusterCollection> _caloClusters;
       art::Handle<CaloHitCollection> _caloHits;
@@ -717,6 +719,7 @@ namespace mu2e {
     _ntuple->Branch("evtinfo",&_einfo,_buffsize,_splitlevel);
     if (fillEventMC()) {
       _ntuple->Branch("evtinfomc",&_einfomc,_buffsize,_splitlevel);
+      _ntuple->Branch("primary.",&_primaryInfos,_buffsize,_splitlevel);
     }
     // hit counting branch
     _ntuple->Branch("hitcount",&_hcnt);
@@ -1015,6 +1018,7 @@ namespace mu2e {
     _hcnt.reset();
     _tcnt.reset();
     _wtinfo.reset();
+    _primaryInfos.clear();
 
     // clear the vector branches
     _hinfos.clear();
@@ -1109,7 +1113,17 @@ namespace mu2e {
       event.getByLabel(_conf.trk().mc().kalSeedMCAssns(),_ksmcah);
       event.getByLabel(_conf.mc().simParticlesTag(),_simParticles);
       event.getByLabel(_conf.mc().mcTrajectoriesTag(),_mcTrajectories);
+
+      // fill primary particle info
+      if(_pph.isValid()) {
+        for(auto sim : _pph->primarySimParticles()) {
+          SimInfo info;
+          _infoMCStructHelper.fillSimInfo(sim, info);
+          _primaryInfos.emplace_back(info);
+        }
+      }
     }
+
     // load calo MC products (independent of fillEventMC)
     if(fillCaloClsMC() || fillCaloTrackMatchMC()){
       event.getByLabel(_conf.calo().mc().clusterMCTag(),_ccmcch);
