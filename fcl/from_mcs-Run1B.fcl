@@ -16,7 +16,11 @@ physics.analyzers.EventNtuple.trk.fits : [
     fill : true
     options : { fillMC : true  fillHits : true genealogyDepth : -1 matchDepth : -1 }
     trkQualLeaves : []
-    trkPIDTags : ["TrkPID:MergeKKLines"]
+    # TrkPID isn't computed for MergeKKLines (neither TrkDtDt nor TrkPID run over it in this
+    # path -- fillTrkPID below doesn't gate branch creation, only trkPIDTags does), so leave it
+    # empty rather than declare a tag that resolves to nothing and produces an always-empty
+    # "trkpid" branch.
+    trkPIDTags : []
     trkDtDtTag : "TrkDtDt:MergeKKLines"
   }
 ]
