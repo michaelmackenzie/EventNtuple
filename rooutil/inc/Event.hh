@@ -440,7 +440,7 @@ namespace rooutil {
       }
     }
 
-    const CaloClusters& GetCaloClusters() { return calo_clusters; }
+    const CaloClusters& GetCaloClusters() const { return calo_clusters; }
     CaloClusters GetCaloClusters(CaloClusterCut cut, bool inplace = false) {
       if (!inplace) { // if we are not changing inplace, then just create a new vector to return
         CaloClusters select_calo_clusters;
