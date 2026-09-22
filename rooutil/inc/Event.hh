@@ -54,6 +54,9 @@
 
 namespace rooutil {
   struct Event {
+    // A set of "<collection>hits" branches, keyed by the collection name they belong to
+    using HitBranches = std::map<std::string, std::vector<std::vector<mu2e::EventNtupleComboHitInfo>>*>;
+
     Event(TChain* ntuple) {
       CheckForBranch(ntuple, "evtinfo", &this->evtinfo);
       CheckForBranch(ntuple, "hitcount", &this->hitcount);
@@ -112,6 +115,24 @@ namespace rooutil {
       }
       CheckForBranch(ntuple, "timeclustershits", &this->timeclustershits);
 
+      // Each time cluster / line seed collection can have a companion "<name>hits" branch holding
+      // the combo hits of each entry, written when EventNtupleMaker's timeclusters.fillHitsFor /
+      // lineseeds.fillHitsFor lists that collection (e.g. "protontimeclustershits",
+      // "lineseedshits"). Look one up per discovered collection and key it by the collection name.
+      // "timeclustershits" already owns the dedicated pointer member above, so only reserve its map
+      // slot here and alias it in BuildTimeClusters(), as is done for the collections themselves.
+      for (const auto& entry : timecluster_branches) {
+        AddHitBranch(ntuple, entry.first, timecluster_hit_branches, entry.first != "timeclusters");
+      }
+      for (const auto& entry : lineseed_branches) {
+        AddHitBranch(ntuple, entry.first, lineseed_hit_branches, true);
+      }
+      // alias "timeclusters" straight away rather than waiting for the first BuildTimeClusters(),
+      // so that a caller setting up an output ntuple before reading an event still sees it
+      if (timecluster_hit_branches.count("timeclusters") != 0) {
+        timecluster_hit_branches["timeclusters"] = timeclustershits;
+      }
+
       CheckForBranch(ntuple, "caloclusters", &this->caloclusters);
       CheckForBranch(ntuple, "calohits", &this->calohits);
       CheckForBranch(ntuple, "calorecodigis", &this->calorecodigis);
@@ -121,6 +142,16 @@ namespace rooutil {
       CheckForBranch(ntuple, "calomcsim", &this->calomcsim);
 
       CheckForBranch(ntuple, "mcsteps_virtualdetector", &this->mcsteps_virtualdetector);
+    }
+
+    // Bind the "<collection>hits" branch, if the ntuple has one, into hit_branches[collection].
+    // bind == false reserves the map slot without taking the branch over, for a collection whose
+    // hits already have a dedicated pointer member (only "timeclusters" does).
+    void AddHitBranch(TChain* ntuple, const std::string& collection, HitBranches& hit_branches, bool bind) {
+      const std::string hits_name = collection + "hits";
+      if (!CheckForBranch(ntuple, hits_name.c_str())) { return; }
+      hit_branches[collection] = nullptr; // reserve a stable map slot before taking its address
+      if (bind) { ntuple->SetBranchAddress(hits_name.c_str(), &hit_branches[collection]); }
     }
 
     void SetUserBranches(const std::vector<std::shared_ptr<UserBranchBase>>& branches) {
@@ -347,55 +378,62 @@ namespace rooutil {
     // backing vector invalidates the pointer held by every wrapper into it, including the copies
     // kept in the named collections, so the wrappers always have to be rebuilt from scratch.
 
+    // The "<collection>hits" branch of a collection, or nullptr if the ntuple does not have one
+    std::vector<std::vector<mu2e::EventNtupleComboHitInfo>>* GetHitBranch(const HitBranches& hit_branches,
+                                                                         const std::string& collection) const {
+      const auto found = hit_branches.find(collection);
+      return (found != hit_branches.end()) ? found->second : nullptr;
+    }
+
     void BuildTimeClusters(bool debug = false) {
       if (debug) { std::cout << "Event::BuildTimeClusters(): Clearing previous TimeClusters... " << std::endl; }
       time_clusters.clear();
       if (timeclusters != nullptr) {
-        for (int i_cluster = 0; i_cluster < nTimeClusters(); ++i_cluster) {
-          if (debug) { std::cout << "Event::BuildTimeClusters(): Creating TimeCluster " << i_cluster << "... " << std::endl; }
-          TimeCluster time_cluster(&(timeclusters->at(i_cluster))); // passing the addresses of the underlying structs
-          if (timeclustershits != nullptr) { time_cluster.hits = &(timeclustershits->at(i_cluster)); }
-          time_clusters.emplace_back(time_cluster);
-        }
-        // alias the conventional branch into the named collections (its pointer is already
-        // refreshed by ROOT via SetBranchAddress on this->timeclusters)
+        // alias the conventional branches into the maps (their pointers are already refreshed by
+        // ROOT via SetBranchAddress on this->timeclusters/this->timeclustershits)
         timecluster_branches["timeclusters"] = timeclusters;
+        if (timecluster_hit_branches.count("timeclusters") != 0) {
+          timecluster_hit_branches["timeclusters"] = timeclustershits;
+        }
       }
       for (auto& entry : timecluster_branches) {
         auto& wrapped = named_time_clusters[entry.first];
-        if (timeclusters != nullptr && entry.second == timeclusters) {
-          wrapped = time_clusters; // reuse the wrappers built above, which also carry the hits pointers
-          continue;
-        }
         wrapped.clear();
-        if (entry.second != nullptr) {
-          for (auto& tc : *(entry.second)) { wrapped.emplace_back(TimeCluster(&tc)); }
+        if (entry.second == nullptr) { continue; }
+        auto* hits = GetHitBranch(timecluster_hit_branches, entry.first);
+        if (hits != nullptr && hits->size() != entry.second->size()) {
+          throw std::runtime_error("Time cluster count mismatch between the " + entry.first + " and " + entry.first + "hits collections");
+        }
+        for (size_t i_cluster = 0; i_cluster < entry.second->size(); ++i_cluster) {
+          if (debug) { std::cout << "Event::BuildTimeClusters(): Creating " << entry.first << " TimeCluster " << i_cluster << "... " << std::endl; }
+          TimeCluster time_cluster(&(entry.second->at(i_cluster))); // passing the addresses of the underlying structs
+          if (hits != nullptr) { time_cluster.hits = &(hits->at(i_cluster)); }
+          wrapped.emplace_back(time_cluster);
         }
       }
+      if (timeclusters != nullptr) { time_clusters = named_time_clusters["timeclusters"]; }
     }
 
     void BuildLineSeeds(bool debug = false) {
       if (debug) { std::cout << "Event::BuildLineSeeds(): Clearing previous LineSeeds... " << std::endl; }
       line_seeds.clear();
-      if (lineseeds != nullptr) {
-        for (int i_seed = 0; i_seed < nLineSeeds(); ++i_seed) {
-          if (debug) { std::cout << "Event::BuildLineSeeds(): Creating LineSeed " << i_seed << "... " << std::endl; }
-          LineSeed line_seed(&(lineseeds->at(i_seed))); // passing the addresses of the underlying structs
-          line_seeds.emplace_back(line_seed);
-        }
-        lineseed_branches["lineseeds"] = lineseeds; // see BuildTimeClusters()
-      }
+      if (lineseeds != nullptr) { lineseed_branches["lineseeds"] = lineseeds; } // see BuildTimeClusters()
       for (auto& entry : lineseed_branches) {
         auto& wrapped = named_line_seeds[entry.first];
-        if (lineseeds != nullptr && entry.second == lineseeds) {
-          wrapped = line_seeds;
-          continue;
-        }
         wrapped.clear();
-        if (entry.second != nullptr) {
-          for (auto& ls : *(entry.second)) { wrapped.emplace_back(LineSeed(&ls)); }
+        if (entry.second == nullptr) { continue; }
+        auto* hits = GetHitBranch(lineseed_hit_branches, entry.first);
+        if (hits != nullptr && hits->size() != entry.second->size()) {
+          throw std::runtime_error("Line seed count mismatch between the " + entry.first + " and " + entry.first + "hits collections");
+        }
+        for (size_t i_seed = 0; i_seed < entry.second->size(); ++i_seed) {
+          if (debug) { std::cout << "Event::BuildLineSeeds(): Creating " << entry.first << " LineSeed " << i_seed << "... " << std::endl; }
+          LineSeed line_seed(&(entry.second->at(i_seed))); // passing the addresses of the underlying structs
+          if (hits != nullptr) { line_seed.hits = &(hits->at(i_seed)); }
+          wrapped.emplace_back(line_seed);
         }
       }
+      if (lineseeds != nullptr) { line_seeds = named_line_seeds["lineseeds"]; }
     }
 
     const TimeClusters& GetTimeClusters() { return time_clusters; }
@@ -425,10 +463,11 @@ namespace rooutil {
           }
         }
         // erase back-to-front so the surviving indices (and the addresses the flags were taken at) stay valid
+        auto* hits = GetHitBranch(timecluster_hit_branches, "timeclusters"); // == timeclustershits
         for (int i_cluster = static_cast<int>(timeclusters->size())-1; i_cluster >= 0; --i_cluster) {
           if (keep_cluster[i_cluster]) { continue; }
           timeclusters->erase(timeclusters->begin()+i_cluster);
-          if (timeclustershits) { timeclustershits->erase(timeclustershits->begin()+i_cluster); }
+          if (hits != nullptr) { hits->erase(hits->begin()+i_cluster); } // keep the hit lists index-aligned
         }
 
         BuildTimeClusters(); // erasing invalidated every wrapper's pointer --> rebuild them all
@@ -461,9 +500,11 @@ namespace rooutil {
             }
           }
         }
+        auto* hits = GetHitBranch(lineseed_hit_branches, "lineseeds");
         for (int i_seed = static_cast<int>(lineseeds->size())-1; i_seed >= 0; --i_seed) {
           if (keep_seed[i_seed]) { continue; }
           lineseeds->erase(lineseeds->begin()+i_seed);
+          if (hits != nullptr) { hits->erase(hits->begin()+i_seed); } // keep the hit lists index-aligned
         }
 
         BuildLineSeeds(); // erasing invalidated every wrapper's pointer --> rebuild them all
@@ -548,6 +589,11 @@ namespace rooutil {
       // Update() (e.g. right after opening the file, to decide what to book histograms for).
       return timecluster_branches.find(name) != timecluster_branches.end();
     }
+    // Whether this collection's combo hit lists were written, i.e. whether the TimeClusters it
+    // returns carry hits (see TimeCluster::HasHits()/Hits())
+    bool HasTimeClusterHits(const std::string& name) const {
+      return timecluster_hit_branches.find(name) != timecluster_hit_branches.end();
+    }
     const TimeClusters& GetTimeClusters(const std::string& name) const {
       static const TimeClusters empty;
       const auto found = named_time_clusters.find(name);
@@ -563,6 +609,10 @@ namespace rooutil {
     bool HasLineSeeds(const std::string& name) const {
       // See HasTimeClusters() above.
       return lineseed_branches.find(name) != lineseed_branches.end();
+    }
+    // See HasTimeClusterHits() above.
+    bool HasLineSeedHits(const std::string& name) const {
+      return lineseed_hit_branches.find(name) != lineseed_hit_branches.end();
     }
     const LineSeeds& GetLineSeeds(const std::string& name) const {
       static const LineSeeds empty;
@@ -615,6 +665,12 @@ namespace rooutil {
     std::map<std::string, TimeClusters> named_time_clusters;
     std::map<std::string, LineSeeds> named_line_seeds;
     std::vector<std::vector<mu2e::EventNtupleComboHitInfo>>* timeclustershits = nullptr;
+
+    // The companion "<collection>hits" branches, keyed by the *collection* name rather than the
+    // branch name, so they line up with the maps above ("timeclusters" -> the "timeclustershits"
+    // branch, aliased to the dedicated pointer above in BuildTimeClusters()).
+    HitBranches timecluster_hit_branches;
+    HitBranches lineseed_hit_branches;
 
     std::vector<mu2e::CaloClusterInfo>* caloclusters = nullptr;
     std::vector<mu2e::CaloHitInfo>* calohits = nullptr;

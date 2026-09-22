@@ -25,9 +25,18 @@ namespace rooutil {
     float      TCalo()      const { return (timecluster) ? timecluster->tcalo       : 0.f  ; }
     bool       HasCalo()    const { return ECalo() >= 0.f; }
 
+    // The combo hits of this time cluster, only filled if the "<collection>hits" branch is in the
+    // ntuple (EventNtupleMaker's timeclusters.fillHitsFor)
+    bool   HasHits()     const { return hits != nullptr; }
+    size_t NComboHits()  const { return (hits) ? hits->size() : 0; }
+    const std::vector<mu2e::EventNtupleComboHitInfo>& Hits() const {
+      static const std::vector<mu2e::EventNtupleComboHitInfo> empty;
+      return (hits) ? *hits : empty;
+    }
+
     // Pointers to the data
     mu2e::EventNtupleTimeClusterInfo* timecluster = nullptr;
-    std::vector<mu2e::EventNtupleComboHitInfo>* hits = nullptr; // only set if the timeclustershits branch is in the ntuple
+    std::vector<mu2e::EventNtupleComboHitInfo>* hits = nullptr; // only set if the <collection>hits branch is in the ntuple
   };
 
   typedef std::function<bool(TimeCluster&)> TimeClusterCut;

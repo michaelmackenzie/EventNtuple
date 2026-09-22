@@ -496,6 +496,52 @@ void create_val_file_rooutil(std::string filename, std::string outfilename) {
   TH1* h_lineseeds_ecalo      = new TH1F("h_lineseeds_ecalo"     , "", 100,     0.,  200.);
   TH1* h_lineseeds_tcalo      = new TH1F("h_lineseeds_tcalo"     , "", 100,     0., 2000.);
 
+  // the combo hits of each time cluster / line seed, from the "<collection>hits" branches
+  TH1* h_combohits_plane      = new TH1F("h_combohits_plane"     , "",  36,     0.,   36.);
+  TH1* h_combohits_panel      = new TH1F("h_combohits_panel"     , "",   6,     0.,    6.);
+  TH1* h_combohits_layer      = new TH1F("h_combohits_layer"     , "",   4,    -1.,    3.);
+  TH1* h_combohits_straw      = new TH1F("h_combohits_straw"     , "", 100,     0.,  100.);
+  TH1* h_combohits_nStrawHits = new TH1F("h_combohits_nStrawHits", "",  20,     0.,   20.);
+  TH1* h_combohits_nCombo     = new TH1F("h_combohits_nCombo"    , "",  20,     0.,   20.);
+  TH1* h_combohits_time       = new TH1F("h_combohits_time"      , "", 100,     0., 2000.);
+  TH1* h_combohits_edep       = new TH1F("h_combohits_edep"      , "", 100,     0.,    0.01);
+  TH1* h_combohits_qual       = new TH1F("h_combohits_qual"      , "", 100,     0.,    1.);
+  TH1* h_combohits_wdist      = new TH1F("h_combohits_wdist"     , "", 100, -1000., 1000.);
+  TH1* h_combohits_wres       = new TH1F("h_combohits_wres"      , "", 100,    -1.,  200.);
+  TH1* h_combohits_tres       = new TH1F("h_combohits_tres"      , "", 100,    -1.,   20.);
+  TH1* h_combohits_posX       = new TH1F("h_combohits_posX"      , "", 100, -1000., 1000.);
+  TH1* h_combohits_posY       = new TH1F("h_combohits_posY"      , "", 100, -1000., 1000.);
+  TH1* h_combohits_posZ       = new TH1F("h_combohits_posZ"      , "", 100, -2000., 2000.);
+  TH1* h_combohits_udirX      = new TH1F("h_combohits_udirX"     , "", 100,    -1.,    1.);
+  TH1* h_combohits_udirY      = new TH1F("h_combohits_udirY"     , "", 100,    -1.,    1.);
+  TH1* h_combohits_udirZ      = new TH1F("h_combohits_udirZ"     , "", 100,    -1.,    1.);
+  TH1* h_timeclusters_nhitsstored = new TH1F("h_timeclusters_nhitsstored", "", 100, 0., 200.);
+  TH1* h_lineseeds_nhitsstored    = new TH1F("h_lineseeds_nhitsstored"   , "", 100, 0., 200.);
+
+  // the combo hit leaves are the same for every collection, so fill them from one place
+  auto FillComboHits = [&](const std::vector<mu2e::EventNtupleComboHitInfo>& hits) {
+    for (const auto& hit : hits) {
+      h_combohits_plane     ->Fill(hit.plane      );
+      h_combohits_panel     ->Fill(hit.panel      );
+      h_combohits_layer     ->Fill(hit.layer      );
+      h_combohits_straw     ->Fill(hit.straw      );
+      h_combohits_nStrawHits->Fill(hit.nStrawHits );
+      h_combohits_nCombo    ->Fill(hit.nCombo     );
+      h_combohits_time      ->Fill(hit.time       );
+      h_combohits_edep      ->Fill(hit.edep       );
+      h_combohits_qual      ->Fill(hit.qual       );
+      h_combohits_wdist     ->Fill(hit.wdist      );
+      h_combohits_wres      ->Fill(hit.wres       );
+      h_combohits_tres      ->Fill(hit.tres       );
+      h_combohits_posX      ->Fill(hit.pos.x()    );
+      h_combohits_posY      ->Fill(hit.pos.y()    );
+      h_combohits_posZ      ->Fill(hit.pos.z()    );
+      h_combohits_udirX     ->Fill(hit.udir.x()   );
+      h_combohits_udirY     ->Fill(hit.udir.y()   );
+      h_combohits_udirZ     ->Fill(hit.udir.z()   );
+    }
+  };
+
   TH1F* h_caloclusters_diskID_ = new TH1F("h_caloclusters_diskID_", "", 2,0,2);
   TH1F* h_caloclusters_time_ = new TH1F("h_caloclusters_time_", "", 200,0,2000);
   TH1F* h_caloclusters_timeErr_ = new TH1F("h_caloclusters_timeErr_", "", 100,0,100);
@@ -1210,6 +1256,25 @@ void create_val_file_rooutil(std::string filename, std::string outfilename) {
         h_lineseeds_B1         ->Fill(seed.B1         );
         h_lineseeds_ecalo      ->Fill(seed.ecalo      );
         h_lineseeds_tcalo      ->Fill(seed.tcalo      );
+      }
+    }
+
+    // Every discovered time cluster / line seed collection that has a "<collection>hits" branch
+    // contributes its combo hits here, so the hit leaves are covered whichever collections a
+    // campaign chooses to store them for
+    std::cout << "Creating combo hit histograms..." << std::endl;
+    for (const auto& name : event.TimeClusterCollectionNames()) {
+      if (!event.HasTimeClusterHits(name)) { continue; }
+      for (const auto& cluster : event.GetTimeClusters(name)) {
+        h_timeclusters_nhitsstored->Fill(cluster.NComboHits());
+        FillComboHits(cluster.Hits());
+      }
+    }
+    for (const auto& name : event.LineSeedCollectionNames()) {
+      if (!event.HasLineSeedHits(name)) { continue; }
+      for (const auto& seed : event.GetLineSeeds(name)) {
+        h_lineseeds_nhitsstored->Fill(seed.NComboHits());
+        FillComboHits(seed.Hits());
       }
     }
 

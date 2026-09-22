@@ -293,6 +293,14 @@ namespace rooutil {
         if (branch.second) { output_ntuple->Branch(branch.first.c_str(), branch.second); }
       }
 
+      // ...and the combo hit list of each collection that has one, under "<collection>hits"
+      for (const auto& branch : event->timecluster_hit_branches) {
+        if (branch.second) { output_ntuple->Branch((branch.first + "hits").c_str(), branch.second); }
+      }
+      for (const auto& branch : event->lineseed_hit_branches) {
+        if (branch.second) { output_ntuple->Branch((branch.first + "hits").c_str(), branch.second); }
+      }
+
       if(event->caloclusters) { output_ntuple->Branch("caloclusters", event->caloclusters); }
       if(event->calohits) { output_ntuple->Branch("calohits", event->calohits); }
       if(event->calorecodigis) { output_ntuple->Branch("calorecodigis", event->calorecodigis); }

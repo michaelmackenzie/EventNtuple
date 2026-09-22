@@ -9,7 +9,9 @@
 //   * *CollectionNames() enumerates them,
 //   * Has*(name)/Get*(name) return the right collection, keyed by name, and
 //   * in-place selection keeps exactly the entries that pass the cut, in the wrappers, in the
-//     named collections and in the underlying branch.
+//     named collections and in the underlying branch, and
+//   * the companion "<collection>hits" combo hit lists are picked up, attached to the right entry
+//     of the right collection, and kept index-aligned through an in-place selection.
 //
 // Usage: root -l -b -q EventNtuple/validation/test_collection_discovery.C+
 // Prints "test_collection_discovery: PASSED" and returns 0 on success, the number of failed
@@ -50,6 +52,18 @@ namespace {
     return info;
   }
 
+  // One combo hit per entry, tagged by time so we can tell which entry it was attached to
+  std::vector<mu2e::EventNtupleComboHitInfo> MakeHits(float time, int n_hits) {
+    std::vector<mu2e::EventNtupleComboHitInfo> hits;
+    for (int i_hit = 0; i_hit < n_hits; ++i_hit) {
+      mu2e::EventNtupleComboHitInfo hit;
+      hit.time = time;
+      hit.nStrawHits = i_hit + 1;
+      hits.emplace_back(hit);
+    }
+    return hits;
+  }
+
   // Write a minimal EventNtuple-like file with two time cluster and two line seed collections, one
   // of each under a name RooUtil does not know about ahead of time
   void WriteTestFile(const std::string& filename) {
@@ -59,16 +73,25 @@ namespace {
 
     std::vector<mu2e::EventNtupleTimeClusterInfo> timeclusters, tztimeclusters;
     std::vector<mu2e::LineSeedInfo> lineseeds, cosmiclineseeds;
+    // hit lists are written per collection, and only for the collections a job asks for: give them
+    // to the conventional time clusters and to the alternately-named line seeds, so both the
+    // dedicated-pointer path and the discovered-branch path are covered, along with two
+    // collections that have none
+    std::vector<std::vector<mu2e::EventNtupleComboHitInfo>> timeclustershits, cosmiclineseedshits;
     ntuple->Branch("timeclusters", &timeclusters);
+    ntuple->Branch("timeclustershits", &timeclustershits);
     ntuple->Branch("tztimeclusters", &tztimeclusters);
     ntuple->Branch("lineseeds", &lineseeds);
     ntuple->Branch("cosmiclineseeds", &cosmiclineseeds);
+    ntuple->Branch("cosmiclineseedshits", &cosmiclineseedshits);
 
     for (int i_event = 0; i_event < 2; ++i_event) {
       timeclusters    = { MakeTimeCluster(100.f, 10), MakeTimeCluster(200.f, 20) };
       tztimeclusters  = { MakeTimeCluster(300.f, 30) };
       lineseeds       = { MakeLineSeed(400.f, 40), MakeLineSeed(500.f, 50) };
       cosmiclineseeds = { MakeLineSeed(600.f, 60) };
+      timeclustershits    = { MakeHits(100.f, 3), MakeHits(200.f, 4) };
+      cosmiclineseedshits = { MakeHits(600.f, 5) };
       ntuple->Fill();
     }
     ntuple->Write();
@@ -97,6 +120,10 @@ int test_collection_discovery(std::string filename = "nts.test.collection_discov
   Check(event.HasLineSeeds("lineseeds"), "HasLineSeeds(\"lineseeds\")");
   Check(event.HasLineSeeds("cosmiclineseeds"), "HasLineSeeds(\"cosmiclineseeds\")");
   Check(!event.HasLineSeeds("notacollection"), "!HasLineSeeds(\"notacollection\")");
+  Check(event.HasTimeClusterHits("timeclusters"), "HasTimeClusterHits(\"timeclusters\")");
+  Check(!event.HasTimeClusterHits("tztimeclusters"), "!HasTimeClusterHits(\"tztimeclusters\") -- no hit branch written");
+  Check(event.HasLineSeedHits("cosmiclineseeds"), "HasLineSeedHits(\"cosmiclineseeds\")");
+  Check(!event.HasLineSeedHits("lineseeds"), "!HasLineSeedHits(\"lineseeds\") -- no hit branch written");
 
   // -- named access returns the right collection once an event has been read
   std::cout << "Named access (after reading an event):" << std::endl;
@@ -110,6 +137,26 @@ int test_collection_discovery(std::string filename = "nts.test.collection_discov
   Check(event.GetLineSeeds("cosmiclineseeds").size() == 1, "GetLineSeeds(\"cosmiclineseeds\") has 1 entry");
   Check(event.GetLineSeeds("cosmiclineseeds").at(0).lineseed->t0 == 600.f, "GetLineSeeds(\"cosmiclineseeds\") holds that branch's data");
   Check(event.GetLineSeeds("notacollection").empty(), "GetLineSeeds() of an unknown name is empty");
+
+  // -- each entry carries its own collection's hit list, and only where one was written
+  std::cout << "Combo hit lists:" << std::endl;
+  const auto& tcs = event.GetTimeClusters("timeclusters");
+  Check(tcs.size() == 2 && tcs.at(0).HasHits() && tcs.at(1).HasHits(), "both timeclusters entries have hits");
+  if (tcs.size() == 2 && tcs.at(0).HasHits() && tcs.at(1).HasHits()) {
+    Check(tcs.at(0).NComboHits() == 3 && tcs.at(1).NComboHits() == 4, "each time cluster gets its own hit list");
+    Check(tcs.at(0).Hits().at(0).time == 100.f && tcs.at(1).Hits().at(0).time == 200.f,
+          "the hit lists are attached to the matching time cluster");
+  }
+  Check(!event.GetTimeClusters("tztimeclusters").at(0).HasHits(), "a collection with no hit branch has no hits");
+  Check(event.GetTimeClusters("tztimeclusters").at(0).Hits().empty(), "Hits() of an entry with no hit list is empty");
+
+  const auto& cosmics = event.GetLineSeeds("cosmiclineseeds");
+  Check(cosmics.size() == 1 && cosmics.at(0).HasHits(), "the cosmiclineseeds entry has hits");
+  if (cosmics.size() == 1 && cosmics.at(0).HasHits()) {
+    Check(cosmics.at(0).NComboHits() == 5, "the line seed hit list has the right size");
+    Check(cosmics.at(0).Hits().at(0).time == 600.f, "the hit list is attached to the matching line seed");
+  }
+  Check(!event.GetLineSeeds("lineseeds").at(0).HasHits(), "a line seed collection with no hit branch has no hits");
 
   // -- the conventional branches stay reachable through the dedicated accessors as well
   Check(event.GetTimeClusters().size() == 2, "GetTimeClusters() still returns the \"timeclusters\" branch");
@@ -142,6 +189,10 @@ int test_collection_discovery(std::string filename = "nts.test.collection_discov
   }
   Check(event.GetTimeClusters("timeclusters").size() == 1, "the named \"timeclusters\" collection tracks the selection");
   Check(event.GetTimeClusters("tztimeclusters").size() == 1, "an unselected time cluster collection is untouched");
+  if (event.GetTimeClusters().size() == 1) { // the hit lists must be erased alongside the clusters
+    Check(event.GetTimeClusters().at(0).NComboHits() == 4, "the surviving time cluster kept its own hit list");
+    Check(event.timeclustershits->size() == 1, "the timeclustershits branch has one entry left");
+  }
 
   // -- reading the next event refreshes everything
   std::cout << "Re-reading:" << std::endl;

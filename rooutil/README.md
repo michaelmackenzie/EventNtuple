@@ -122,15 +122,40 @@ The ```TimeCluster``` class contains all information related to a single reconst
 (`NHits()`, `NStrawHits()`, `T0()`, `Pos()`, `ECalo()`, `TCalo()`, `HasCalo()`).
 
 * single objects: ```timecluster```
-* vectors: ```hits``` (only if the ```timeclustershits``` branch was written)
+* vectors: ```hits``` (only if this collection's hit list branch was written -- see below)
 
 ### The ```LineSeed``` Class
 The ```LineSeed``` class contains all information related to a single reconstructed line seed (the
-straight-line analogue of a helix seed, used for field-off/cosmic-track finding) -- see
-`EventNtuple/inc/LineSeedInfo.hh` for the fields (`status`, `nhits`, `nStrawHits`, `t0`, `d0`,
-`phi0`, `z0`, `cos`, `A0`/`B0`/`A1`/`B1`, `ecalo`, `tcalo`).
+straight-line analogue of a helix seed, used for field-off/cosmic-track finding). It has accessors
+for the common fields (`Status()`, `NHits()`, `NStrawHits()`, `T0()`, `EDep()`, `ECalo()`,
+`TCalo()`, `HasCalo()`); see `EventNtuple/inc/LineSeedInfo.hh` for the rest (`d0`, `phi0`, `z0`,
+`cos`, `A0`/`B0`/`A1`/`B1`).
 
 * single objects: ```lineseed```
+* vectors: ```hits``` (only if this collection's hit list branch was written -- see below)
+
+### Time cluster / line seed combo hits
+A job can store the combo hits making up each time cluster or line seed, in a companion branch
+named after the collection with `hits` appended (`timeclustershits`, `protontimeclustershits`,
+`lineseedshits`, ...). This is per collection, and off by default: EventNtupleMaker only writes it
+for the collections listed in `timeclusters.fillHitsFor`/`lineseeds.fillHitsFor`, since the hit
+lists are much larger than the clusters themselves.
+
+Where they were written, `rooutil` attaches each entry's hits to that entry, so there is nothing to
+index by hand:
+
+```cpp
+for (const auto& cluster : event.GetTimeClusters("protontimeclusters")) {
+  if (!cluster.HasHits()) continue;                 // this collection's hits were not stored
+  for (const auto& hit : cluster.Hits()) { ... }    // EventNtupleComboHitInfo, see ComboHitInfo.hh
+}
+```
+
+`HasTimeClusterHits(name)`/`HasLineSeedHits(name)` say up front whether a given collection has its
+hit lists in the file, without reading an event. `Hits()` returns an empty vector (and `HasHits()`
+is false, `NComboHits()` zero) for a collection whose hits were not stored, so a loop over them is
+always safe. In-place selection keeps the hit lists in step with the entries it removes, and
+`CreateOutputEventNtuple()` re-emits them alongside their collections.
 
 ### Multiple time cluster / line seed collections
 A job can fill more than one time cluster or line seed collection under different output branch
@@ -149,10 +174,11 @@ if (event.HasLineSeeds("cosmiclineseeds")) {
 }
 ```
 
-`TimeClusterCollectionNames()`/`LineSeedCollectionNames()` and `HasTimeClusters(name)`/
-`HasLineSeeds(name)` are available immediately after opening a file (they reflect what branches
-exist in the input, independent of which event has been read); `GetTimeClusters(name)`/
-`GetLineSeeds(name)` return that event's data once at least one event has been read.
+`TimeClusterCollectionNames()`/`LineSeedCollectionNames()`, `HasTimeClusters(name)`/
+`HasLineSeeds(name)` and `HasTimeClusterHits(name)`/`HasLineSeedHits(name)` are available
+immediately after opening a file (they reflect what branches exist in the input, independent of
+which event has been read); `GetTimeClusters(name)`/`GetLineSeeds(name)` return that event's data
+once at least one event has been read.
 
 ### The ```CaloCluster``` Class
 The ```CaloCluster``` class contains all information related to a single calorimeter cluster
