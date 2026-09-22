@@ -122,6 +122,7 @@ The ```TimeCluster``` class contains all information related to a single reconst
 (`nHits()`, `NStrawHits()`, `T0()`, `Pos()`, `ECalo()`, `TCalo()`, `HasCalo()`).
 
 * single objects: ```timecluster```
+* vectors: ```hits``` (only if the ```timeclustershits``` branch was written)
 
 ### The ```LineSeed``` Class
 The ```LineSeed``` class contains all information related to a single reconstructed line seed (the

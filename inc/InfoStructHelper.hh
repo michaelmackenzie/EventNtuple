@@ -12,6 +12,7 @@
 #include "Offline/RecoDataProducts/inc/HelixSeed.hh"
 #include "Offline/RecoDataProducts/inc/TimeCluster.hh"
 #include "Offline/RecoDataProducts/inc/CosmicTrackSeed.hh"
+#include "Offline/RecoDataProducts/inc/ComboHit.hh"
 #include "Offline/RecoDataProducts/inc/CosmicTrack.hh"
 #include "Offline/RecoDataProducts/inc/CrvCoincidenceCluster.hh"
 #include "Offline/RecoDataProducts/inc/MVAResult.hh"
@@ -38,6 +39,7 @@
 #include "EventNtuple/inc/HelixInfo.hh"
 #include "EventNtuple/inc/TimeClusterInfo.hh"
 #include "EventNtuple/inc/LineSeedInfo.hh"
+#include "EventNtuple/inc/ComboHitInfo.hh"
 #include "EventNtuple/inc/MVAResultInfo.hh"
 #include "EventNtuple/inc/CrvHitInfoReco.hh"
 #include "EventNtuple/inc/CaloClusterInfo.hh"
@@ -81,12 +83,16 @@ namespace mu2e {
     void fillMatInfo(const KalSeed& kseed, std::vector<std::vector<TrkStrawMatInfo>>& tminfos );
     void fillTrkCaloHitInfo(const KalSeed& kseed, std::vector<TrkCaloHitInfo>& tchinfo );
     void fillHelixInfo(art::Ptr<HelixSeed> const& hptr, std::vector<HelixInfo>& all_hinfos);
-    void fillTimeClusterInfo(TimeCluster const& tc, std::vector<EventNtupleTimeClusterInfo>& infos);
-    void fillTimeClusterInfo(art::Ptr<TimeCluster> const& ptr, std::vector<EventNtupleTimeClusterInfo>& infos);
+    // chcol is the combo hit collection the time cluster indexes; if null the hit-derived leaves are left undefined
+    void fillTimeClusterInfo(TimeCluster const& tc, std::vector<EventNtupleTimeClusterInfo>& infos, ComboHitCollection const* chcol = nullptr);
+    void fillTimeClusterInfo(art::Ptr<TimeCluster> const& ptr, std::vector<EventNtupleTimeClusterInfo>& infos, ComboHitCollection const* chcol = nullptr);
+    void fillTimeClusterHitInfo(TimeCluster const& tc, ComboHitCollection const& chcol, std::vector<std::vector<EventNtupleComboHitInfo>>& all_infos);
     void fillLumiStreamInfo(IntensityInfoCalo const& info, LumiStreamInfo& lumi);
     void fillLumiStreamInfo(IntensityInfoTimeCluster const& info, LumiStreamInfo& lumi);
     void fillLumiStreamInfo(IntensityInfoTrackerHits const& info, LumiStreamInfo& lumi);
     void fillLineSeedInfo(CosmicTrackSeed const& seed, std::vector<LineSeedInfo>& infos);
+    void fillLineSeedHitInfo(CosmicTrackSeed const& seed, std::vector<std::vector<EventNtupleComboHitInfo>>& all_infos);
+    void fillComboHitInfo(ComboHit const& hit, std::vector<EventNtupleComboHitInfo>& infos);
 
     void fillCaloClusterInfo(const CaloCluster& ccptr, std::vector<CaloClusterInfo>& clusterinfos);
     void fillCaloHitInfo(const CaloHit& chptr, std::vector<CaloHitInfo>& hitinfos, int clusterIdx = -1);

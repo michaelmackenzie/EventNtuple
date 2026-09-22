@@ -3,16 +3,16 @@ import os
 class nthelper:
 
     single_object_branches = ['evtinfo', 'evtinfomc', 'hitcount', 'tcnt', 'crvsummary', 'crvsummarymc', 'lumistream']
-    vector_object_branches = ['trk', 'trkmc', 'trkdtdt', 'trkcalohit', 'trkcalohitmc', 'timeclusters', 'lineseeds', 'caloclustersmc', 'calohitsmc', 'calodigismc', 'calomcsim', 'calodigisim', 'caloclusters', 'calohits', 'calorecodigis', 'calodigis', 'crvcoincs', 'crvcoincsmc', 'crvcoincsmcplane', 'crvpulses', 'crvdigis', 'crvpulsesmc', 'trkqual', 'trkpid', 'mcsteps']
-    vector_vector_object_branches = ['trksegs', 'trksegpars_lh', 'trksegpars_ch', 'trksegpars_kl', 'trkmcsim', 'trkhits', 'trkhitsmc', 'trkmats', 'trkhitcalibs', 'trkmcsci', 'trkmcssi', 'trksegsmc' ]
+    vector_object_branches = ['trk', 'trkmc', 'trkdtdt', 'trkcalohit', 'trkcalohitmc', 'timeclusters', 'lineseeds', 'caloclustersmc', 'calohitsmc', 'calodigismc', 'calomcsim', 'calodigisim', 'caloclusters', 'calohits', 'calorecodigis', 'calodigis', 'crvcoincs', 'crvcoincsmc', 'crvcoincsmcplane', 'crvpulses', 'crvdigis', 'crvpulsesmc', 'trkqual', 'trkpid', 'mcsteps', 'primary']
+    vector_vector_object_branches = ['trksegs', 'trksegpars_lh', 'trksegpars_ch', 'trksegpars_kl', 'trkmcsim', 'trkhits', 'trkhitsmc', 'trkmats', 'trkhitcalibs', 'trkmcsci', 'trkmcssi', 'trksegsmc', 'timeclustershits', 'lineseedshits' ]
 
-    evt_branches = ['evtinfo','evtinfomc','hitcount','tcnt', 'lumistream']
+    evt_branches = ['evtinfo','evtinfomc','hitcount','tcnt', 'lumistream', 'primary']
     trk_branches = ['trk', 'trkmc', 'trkcalohit', 'trkcalohitmc', 'trkdtdt', 'trkqual', 'trkpid']
     trksegs_branches = ['trksegs', 'trksegpars_lh', 'trksegpars_ch', 'trksegpars_kl', 'trksegsmc']
     straw_branches = ['trkhits', 'trkmats', 'trkhitsmc', 'trkhitcalibs']
     trk_mc_branches = [ 'trkmcsim' ]
     general_mc_branches = [ 'mcsteps' ]
-    basic_branches = [ 'timeclusters', 'lineseeds' ]
+    basic_branches = [ 'timeclusters', 'lineseeds', 'timeclustershits', 'lineseedshits' ]
     calo_branches = ['caloclusters', 'calohits', 'calorecodigis', 'calodigis']
     calo_mc_branches = ['caloclustersmc', 'calohitsmc', 'calodigismc', 'calomcsim', 'calodigisim']
     crv_branches = ['crvsummary','crvsummarymc','crvcoincs','crvcoincsmc','crvcoincsmcplane','crvpulses','crvdigis','crvpulsesmc']
@@ -34,6 +34,7 @@ class nthelper:
                            'evtinfomc' : "EventInfoMC",
                            'hitcount' : "HitCount",
                            'lumistream' : 'LumiStreamInfo',
+                           'primary' : 'SimInfo',
                            'tcnt' : "TrkCount", # TODO: leaves can't be retrieved because they are runtime made
                            'trk' : "TrkInfo",
                            'trksegs' : "TrkSegInfo",
@@ -52,6 +53,8 @@ class nthelper:
                            'trkmcssi' : "MCStepSummaryInfo",
                            'timeclusters' : "TimeClusterInfo",
                            'lineseeds' : "LineSeedInfo",
+                           'timeclustershits' : "ComboHitInfo",
+                           'lineseedshits' : "ComboHitInfo",
                            'caloclustersmc': "CaloClusterInfoMC",
                            'calohitmc' : "CaloHitInfoMC",
                            'calohitsmc' : "CaloHitInfoMC",

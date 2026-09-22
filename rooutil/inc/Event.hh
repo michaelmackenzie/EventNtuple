@@ -70,6 +70,7 @@ namespace rooutil {
 
       // Check if the MC branches exist
       CheckForBranch(ntuple, "evtinfomc", &this->evtinfomc);
+      CheckForBranch(ntuple, "primary", &this->primary);
       CheckForBranch(ntuple, "crvsummarymc", &this->crvsummarymc);
       CheckForBranch(ntuple, "trkmc", &this->trkmc);
       CheckForBranch(ntuple, "trksegsmc", &this->trksegsmc);
@@ -109,6 +110,7 @@ namespace rooutil {
           ntuple->SetBranchAddress(name.c_str(), &lineseed_branches[name]);
         }
       }
+      CheckForBranch(ntuple, "timeclustershits", &this->timeclustershits);
 
       CheckForBranch(ntuple, "caloclusters", &this->caloclusters);
       CheckForBranch(ntuple, "calohits", &this->calohits);
@@ -192,6 +194,7 @@ namespace rooutil {
         for (int i_cluster = 0; i_cluster < nTimeClusters(); ++i_cluster) {
           if (debug) { std::cout << "Event::Update(): Creating TimeCluster " << i_cluster << "... " << std::endl; }
           TimeCluster time_cluster(&(timeclusters->at(i_cluster))); // passing the addresses of the underlying structs
+          if (timeclustershits != nullptr) { time_cluster.hits = &(timeclustershits->at(i_cluster)); }
           time_clusters.emplace_back(time_cluster);
         }
       }
@@ -401,6 +404,7 @@ namespace rooutil {
         }
         for (int i_cluster = time_clusters_to_remove.size()-1; i_cluster >= 0; --i_cluster) {
           timeclusters->erase(timeclusters->begin()+time_clusters_to_remove[i_cluster]);
+          if (timeclustershits) { timeclustershits->erase(timeclustershits->begin()+time_clusters_to_remove[i_cluster]); }
         }
 
         time_clusters.erase(newEnd, time_clusters.end()); // remove only rearranges and returns the new end
@@ -549,6 +553,7 @@ namespace rooutil {
     // Pointers to the data
     mu2e::EventInfo* evtinfo = nullptr;
     mu2e::EventInfoMC* evtinfomc = nullptr;
+    std::vector<mu2e::SimInfo>* primary = nullptr;
     mu2e::HitCount* hitcount = nullptr;
     mu2e::CrvSummaryReco* crvsummary = nullptr;
     mu2e::CrvSummaryMC* crvsummarymc = nullptr;
@@ -582,6 +587,7 @@ namespace rooutil {
     std::map<std::string, std::vector<mu2e::LineSeedInfo>*> lineseed_branches;
     std::map<std::string, TimeClusters> named_time_clusters;
     std::map<std::string, LineSeeds> named_line_seeds;
+    std::vector<std::vector<mu2e::EventNtupleComboHitInfo>>* timeclustershits = nullptr;
 
     std::vector<mu2e::CaloClusterInfo>* caloclusters = nullptr;
     std::vector<mu2e::CaloHitInfo>* calohits = nullptr;

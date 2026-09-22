@@ -38,6 +38,9 @@
   <class name="mu2e::LumiStreamInfo" />
   <class name="mu2e::LineSeedInfo" />
   <class name="std::vector<mu2e::LineSeedInfo>" />
+  <class name="mu2e::EventNtupleComboHitInfo" />
+  <class name="std::vector<mu2e::EventNtupleComboHitInfo>" />
+  <class name="std::vector<std::vector<mu2e::EventNtupleComboHitInfo>>" />
   <class name="mu2e::SimInfo" />
   <class name="std::vector<mu2e::SimInfo>" />
   <class name="std::vector<std::vector<mu2e::SimInfo>>" />

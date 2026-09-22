@@ -43,6 +43,14 @@ physics.analyzers.EventNtuple.timeclusters.names  : [  # Output branch names
   "tphitimeclusters"
 ]
 
+# All of the time cluster finders run over makePH in Run-1B reco, which the -KL mcs files keep in full
+physics.analyzers.EventNtuple.timeclusters.comboHitTags : [ "makePH" ]
+# Store the hits of the target-origin electron and proton time clusters
+physics.analyzers.EventNtuple.timeclusters.fillHitsFor : [ "timeclusters", "protontimeclusters" ]
+# The other hit branches are off; they can be turned on per collection by output name, e.g.:
+#   physics.analyzers.EventNtuple.lineseeds.fillHitsFor : [ "lineseeds", "protonlineseeds" ]
+# tphitimeclusters has ~20x the clusters of the others and dominates the ntuple size if its hits are stored
+
 # Store track seeds for straight line track finding
 physics.analyzers.EventNtuple.lineseeds.fill : true
 physics.analyzers.EventNtuple.lineseeds.tags  : [

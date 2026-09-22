@@ -11,6 +11,7 @@ These branches contain one element per event.
 | hitcount |  Single objects branch |   counts of different hit types in an event| [see HitCount.hh](../inc/HitCount.hh)
 | tcnt |  Single objects branch |   counts track types and track-related quantities in an event (MARKED FOR REMOVAL)| [see TrkCount.hh](../inc/TrkCount.hh)
 | lumistream |  Single objects branch |   basic information available in the lumi stream| [see LumiStreamInfo.hh](../inc/LumiStreamInfo.hh)
+| primary |  Vector branch |   information about SimParticles in genealogy| [see SimInfo.hh](../inc/SimInfo.hh)
 ## Track Branches
 
 Each element in these branch corresponds to a different Kalman fit hypotheses to reconstruct the track:
@@ -89,6 +90,8 @@ The branch is empty if there are no time clusters during the event.
 |--------|-----------|-------------|------------------|
 | timeclusters |  Vector branch |   Information in a reconstructed time cluster| [see TimeClusterInfo.hh](../inc/TimeClusterInfo.hh)
 | lineseeds |  Vector branch |   Information in a reconstructed line seed (cosmic track seed)| [see LineSeedInfo.hh](../inc/LineSeedInfo.hh)
+| timeclustershits |  Vector-of-vector branch |   Basic information about a combo hit associated with a time cluster or a line seed| [see ComboHitInfo.hh](../inc/ComboHitInfo.hh)
+| lineseedshits |  Vector-of-vector branch |   Basic information about a combo hit associated with a time cluster or a line seed| [see ComboHitInfo.hh](../inc/ComboHitInfo.hh)
 ## Calorimeter Branches
 
 These branches are vectors of calorimeter clusters/hits/recodigis/digis that happened during the event.

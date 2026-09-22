@@ -257,6 +257,7 @@ namespace rooutil {
 
       if(event->evtinfo) { output_ntuple->Branch("evtinfo", event->evtinfo); }
       if(event->evtinfomc) { output_ntuple->Branch("evtinfomc", event->evtinfomc); }
+      if(event->primary) { output_ntuple->Branch("primary", event->primary); }
       if(event->hitcount) { output_ntuple->Branch("hitcount", event->hitcount); }
       if(event->crvsummary) { output_ntuple->Branch("crvsummary", event->crvsummary); }
       if(event->crvsummarymc) { output_ntuple->Branch("crvsummarymc", event->crvsummarymc); }

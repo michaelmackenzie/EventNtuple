@@ -349,12 +349,15 @@ EventNtupleMaker : {
     fill : false
     tags  : ["MHDe"]
     names : ["timeclusters"]
+    comboHitTags : [] # combo hit collection(s) the time clusters index; needed for fillHitsFor and the edep leaf
+    fillHitsFor : [] # entries of names to fill a <name>hits branch for
   }
   # -- Line seeds ------------------------------------------------------------
   lineseeds : {
     fill : false
     tags  : ["LineFinder"]
     names : ["lineseeds"]
+    fillHitsFor : [] # entries of names to fill a <name>hits branch for
   }
   # -- Lumi stream -----------------------------------------------------------
   lumistream : {

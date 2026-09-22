@@ -17,6 +17,7 @@
 #include "EventNtuple/inc/TimeClusterInfo.hh"
 #include "EventNtuple/inc/LumiStreamInfo.hh"
 #include "EventNtuple/inc/LineSeedInfo.hh"
+#include "EventNtuple/inc/ComboHitInfo.hh"
 #include "EventNtuple/inc/SimInfo.hh"
 #include "EventNtuple/inc/MCStepInfo.hh"
 #include "EventNtuple/inc/MCStepSummaryInfo.hh"

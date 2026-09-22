@@ -11,6 +11,7 @@
 #include "Offline/TrackerGeom/inc/Tracker.hh"
 #include "Offline/CalorimeterGeom/inc/Calorimeter.hh"
 #include "Offline/CalorimeterGeom/inc/Crystal.hh"
+#include "Offline/CaloCluster/inc/ClusterUtils.hh"
 #include "Offline/DataProducts/inc/CaloConst.hh"
 #include <cmath>
 #include <limits>
@@ -494,11 +495,78 @@ namespace mu2e {
     }
   }
 
-  void InfoStructHelper::fillTimeClusterInfo(TimeCluster const& tc, std::vector<EventNtupleTimeClusterInfo>& infos) {
+  namespace {
+    // The hit indices of a time cluster are only meaningful against the collection it was built from, and nothing in the
+    // data product records which one that was. A wrong collection usually still has every index in range, so also
+    // require the straw hit count to add up
+    std::vector<ComboHit const*> timeClusterHits(TimeCluster const& tc, ComboHitCollection const& chcol) {
+      std::vector<ComboHit const*> hits;
+      hits.reserve(tc.nhits());
+      unsigned nsh(0);
+      for(auto index : tc.hits()) {
+        if(index >= chcol.size())
+          throw cet::exception("EventNtuple") << "Time cluster hit index " << index << " is outside the combo hit collection of size "
+                                              << chcol.size() << ": check timeclusters.comboHitTags";
+        hits.push_back(&chcol[index]);
+        nsh += chcol[index].nStrawHits();
+      }
+      if(tc.nStrawHits() > 0 && nsh != tc.nStrawHits())
+        throw cet::exception("EventNtuple") << "Time cluster has " << tc.nStrawHits() << " straw hits but its indices select " << nsh
+                                            << " from the combo hit collection: check timeclusters.comboHitTags";
+      return hits;
+    }
+
+    // straw-hit-weighted average energy deposition
+    float averageEDep(std::vector<ComboHit const*> const& hits) {
+      float sum(0.f);
+      unsigned nsh(0);
+      for(auto hit : hits) {
+        sum += hit->energyDep()*hit->nStrawHits();
+        nsh += hit->nStrawHits();
+      }
+      return (nsh > 0) ? sum/nsh : -1.f;
+    }
+  }
+
+  void InfoStructHelper::fillComboHitInfo(ComboHit const& hit, std::vector<EventNtupleComboHitInfo>& infos) {
+    EventNtupleComboHitInfo info;
+    info.plane = hit.strawId().plane();
+    info.panel = hit.strawId().panel();
+    info.layer = hit.strawId().layer();
+    info.straw = hit.strawId().straw();
+    info.nStrawHits = hit.nStrawHits();
+    info.nCombo = hit.nCombo();
+    info.time = hit.correctedTime();
+    info.edep = hit.energyDep();
+    info.qual = hit.qual();
+    info.wdist = hit.wireDist();
+    info.wres = hit.wireRes();
+    info.tres = hit.transRes();
+    info.pos = hit.pos();
+    info.udir = hit.uDir();
+    infos.emplace_back(info);
+  }
+
+  void InfoStructHelper::fillTimeClusterHitInfo(TimeCluster const& tc, ComboHitCollection const& chcol, std::vector<std::vector<EventNtupleComboHitInfo>>& all_infos) {
+    std::vector<EventNtupleComboHitInfo> infos;
+    infos.reserve(tc.nhits());
+    for(auto hit : timeClusterHits(tc, chcol)) fillComboHitInfo(*hit, infos);
+    all_infos.emplace_back(std::move(infos));
+  }
+
+  void InfoStructHelper::fillLineSeedHitInfo(CosmicTrackSeed const& seed, std::vector<std::vector<EventNtupleComboHitInfo>>& all_infos) {
+    std::vector<EventNtupleComboHitInfo> infos;
+    infos.reserve(seed.hits().size());
+    for(auto const& hit : seed.hits()) fillComboHitInfo(hit, infos);
+    all_infos.emplace_back(std::move(infos));
+  }
+
+  void InfoStructHelper::fillTimeClusterInfo(TimeCluster const& tc, std::vector<EventNtupleTimeClusterInfo>& infos, ComboHitCollection const* chcol) {
     EventNtupleTimeClusterInfo info;
     info.nhits = tc.nhits();
     info.nStrawHits = tc.nStrawHits();
     info.t0 = tc.t0().t0();
+    if(chcol) info.edep = averageEDep(timeClusterHits(tc, *chcol)); // only defined if the combo hit collection is available
     info.pos = tc.position();
     if(tc.hasCaloCluster()) { // only defined if a calo cluster is associated with the time cluster
       info.ecalo = tc.caloCluster()->energyDep();
@@ -507,9 +575,9 @@ namespace mu2e {
     infos.emplace_back(info);
   }
 
-  void InfoStructHelper::fillTimeClusterInfo(art::Ptr<TimeCluster> const& ptr, std::vector<EventNtupleTimeClusterInfo>& infos) {
+  void InfoStructHelper::fillTimeClusterInfo(art::Ptr<TimeCluster> const& ptr, std::vector<EventNtupleTimeClusterInfo>& infos, ComboHitCollection const* chcol) {
     if(ptr.isNull()) return;
-    fillTimeClusterInfo(*ptr, infos);
+    fillTimeClusterInfo(*ptr, infos, chcol);
   }
   void InfoStructHelper::fillLineSeedInfo(CosmicTrackSeed const& seed, std::vector<LineSeedInfo>& infos) {
     LineSeedInfo info;
@@ -518,6 +586,10 @@ namespace mu2e {
     info.nhits = seed.hits().size();
     info.nStrawHits = seed.hits().nStrawHits();
     info.t0 = seed.t0().t0();
+    std::vector<ComboHit const*> hits;
+    hits.reserve(seed.hits().size());
+    for(auto const& hit : seed.hits()) hits.push_back(&hit);
+    info.edep = averageEDep(hits);
     info.d0 = track.d0();
     info.phi0 = track.phi0();
     info.z0 = track.z0();
@@ -565,6 +637,18 @@ namespace mu2e {
     clusterinfo.cog_ = ccptr.cog3Vector();
     clusterinfo.size_ = ccptr.size();
     clusterinfo.isSplit_ = ccptr.isSplit();
+    
+    // Compute energy moments if cluster has hits
+    if (!ccptr.caloHitsPtrVector().empty()) {
+      auto cal = GeomHandle<Calorimeter>();
+      ClusterUtils clusterUtils(*cal, ccptr);
+      clusterinfo.secondMoment_ = clusterUtils.secondMoment();
+      clusterinfo.e1_ = clusterUtils.e1();
+      clusterinfo.e2_ = clusterUtils.e2();
+      clusterinfo.e9_ = clusterUtils.e9();
+      clusterinfo.e25_ = clusterUtils.e25();
+    }
+    
     clusterinfos.push_back(clusterinfo);
   }
 

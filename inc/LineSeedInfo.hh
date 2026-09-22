@@ -14,6 +14,7 @@ namespace mu2e
     int nhits = 0; // N(combo hits)
     int nStrawHits = 0; //N(straw hits)
     float t0 = 0.; // T0 time
+    float edep = -1.f; // straw-hit-weighted average hit energy deposition, in MeV
     float d0 = 0.; // Track d0
     float phi0 = 0.; // Track phi0
     float z0 = 0.; // Track z0
