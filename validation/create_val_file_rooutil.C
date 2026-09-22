@@ -484,10 +484,15 @@ void create_val_file_rooutil(std::string filename, std::string outfilename) {
   TH1* h_lineseeds_nhits      = new TH1F("h_lineseeds_nhits"     , "", 100,     0.,  200.);
   TH1* h_lineseeds_nStrawHits = new TH1F("h_lineseeds_nStrawHits", "", 100,     0.,  200.);
   TH1* h_lineseeds_t0         = new TH1F("h_lineseeds_t0"        , "", 100,     0., 2000.);
+  TH1* h_lineseeds_edep       = new TH1F("h_lineseeds_edep"      , "", 100,     0.,    0.01);
   TH1* h_lineseeds_d0         = new TH1F("h_lineseeds_d0"        , "", 100, -1000., 1000.);
   TH1* h_lineseeds_phi0       = new TH1F("h_lineseeds_phi0"      , "", 100,    -4.,    4.);
   TH1* h_lineseeds_z0         = new TH1F("h_lineseeds_z0"        , "", 100, -5000., 5000.);
   TH1* h_lineseeds_cos        = new TH1F("h_lineseeds_cos"       , "", 100,    -1.,    1.);
+  TH1* h_lineseeds_A0         = new TH1F("h_lineseeds_A0"        , "", 100, -5000., 5000.);
+  TH1* h_lineseeds_B0         = new TH1F("h_lineseeds_B0"        , "",100,-50000.,50000.);
+  TH1* h_lineseeds_A1         = new TH1F("h_lineseeds_A1"        , "", 100,   -40.,   40.);
+  TH1* h_lineseeds_B1         = new TH1F("h_lineseeds_B1"        , "", 100,  -500.,  500.);
   TH1* h_lineseeds_ecalo      = new TH1F("h_lineseeds_ecalo"     , "", 100,     0.,  200.);
   TH1* h_lineseeds_tcalo      = new TH1F("h_lineseeds_tcalo"     , "", 100,     0., 2000.);
 
@@ -824,10 +829,12 @@ void create_val_file_rooutil(std::string filename, std::string outfilename) {
       }
     }
 
-    std::cout << "Creating trkqual histograms..." << std::endl;
-    for (const auto& trkqual : *(event.trkqual)) {
-      h_trkqual_valid->Fill(trkqual.valid);
-      h_trkqual_result->Fill(trkqual.result);
+    if (event.trkqual != nullptr) { // Run1B ntuples do not have this branch
+      std::cout << "Creating trkqual histograms..." << std::endl;
+      for (const auto& trkqual : *(event.trkqual)) {
+        h_trkqual_valid->Fill(trkqual.valid);
+        h_trkqual_result->Fill(trkqual.result);
+      }
     }
 
     if (event.trksegpars_lh != nullptr) { // might not have this branch
@@ -1192,10 +1199,15 @@ void create_val_file_rooutil(std::string filename, std::string outfilename) {
         h_lineseeds_nhits      ->Fill(seed.nhits      );
         h_lineseeds_nStrawHits ->Fill(seed.nStrawHits );
         h_lineseeds_t0         ->Fill(seed.t0         );
+        h_lineseeds_edep       ->Fill(seed.edep       );
         h_lineseeds_d0         ->Fill(seed.d0         );
         h_lineseeds_phi0       ->Fill(seed.phi0       );
         h_lineseeds_z0         ->Fill(seed.z0         );
         h_lineseeds_cos        ->Fill(seed.cos        );
+        h_lineseeds_A0         ->Fill(seed.A0         );
+        h_lineseeds_B0         ->Fill(seed.B0         );
+        h_lineseeds_A1         ->Fill(seed.A1         );
+        h_lineseeds_B1         ->Fill(seed.B1         );
         h_lineseeds_ecalo      ->Fill(seed.ecalo      );
         h_lineseeds_tcalo      ->Fill(seed.tcalo      );
       }

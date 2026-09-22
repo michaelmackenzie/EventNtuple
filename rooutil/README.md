@@ -119,7 +119,7 @@ Example: [PlotMCParentPosZ.C](./examples/PlotMCParentPosZ.C)
 
 ### The ```TimeCluster``` Class
 The ```TimeCluster``` class contains all information related to a single reconstructed time cluster
-(`nHits()`, `NStrawHits()`, `T0()`, `Pos()`, `ECalo()`, `TCalo()`, `HasCalo()`).
+(`NHits()`, `NStrawHits()`, `T0()`, `Pos()`, `ECalo()`, `TCalo()`, `HasCalo()`).
 
 * single objects: ```timecluster```
 * vectors: ```hits``` (only if the ```timeclustershits``` branch was written)

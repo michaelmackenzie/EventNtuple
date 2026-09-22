@@ -188,46 +188,8 @@ namespace rooutil {
         crv_coincs.emplace_back(crv_coinc);
       }
 
-      if (timeclusters != nullptr) {
-        if (debug) { std::cout << "Event::Update(): Clearing previous TimeClusters... " << std::endl; }
-        time_clusters.clear();
-        for (int i_cluster = 0; i_cluster < nTimeClusters(); ++i_cluster) {
-          if (debug) { std::cout << "Event::Update(): Creating TimeCluster " << i_cluster << "... " << std::endl; }
-          TimeCluster time_cluster(&(timeclusters->at(i_cluster))); // passing the addresses of the underlying structs
-          if (timeclustershits != nullptr) { time_cluster.hits = &(timeclustershits->at(i_cluster)); }
-          time_clusters.emplace_back(time_cluster);
-        }
-      }
-
-      if (lineseeds != nullptr) {
-        if (debug) { std::cout << "Event::Update(): Clearing previous LineSeeds... " << std::endl; }
-        line_seeds.clear();
-        for (int i_seed = 0; i_seed < nLineSeeds(); ++i_seed) {
-          if (debug) { std::cout << "Event::Update(): Creating LineSeed " << i_seed << "... " << std::endl; }
-          LineSeed line_seed(&(lineseeds->at(i_seed))); // passing the addresses of the underlying structs
-          line_seeds.emplace_back(line_seed);
-        }
-      }
-
-      // Rebuild the named-collection wrappers. The conventional branches are aliased in here (their
-      // pointer is already refreshed by ROOT via SetBranchAddress on this->timeclusters/lineseeds).
-      if (timeclusters != nullptr) timecluster_branches["timeclusters"] = timeclusters;
-      for (auto& entry : timecluster_branches) {
-        auto& wrapped = named_time_clusters[entry.first];
-        wrapped.clear();
-        if (entry.second != nullptr) {
-          for (auto& tc : *(entry.second)) { wrapped.emplace_back(TimeCluster(&tc)); }
-        }
-      }
-
-      if (lineseeds != nullptr) lineseed_branches["lineseeds"] = lineseeds;
-      for (auto& entry : lineseed_branches) {
-        auto& wrapped = named_line_seeds[entry.first];
-        wrapped.clear();
-        if (entry.second != nullptr) {
-          for (auto& ls : *(entry.second)) { wrapped.emplace_back(LineSeed(&ls)); }
-        }
-      }
+      BuildTimeClusters(debug);
+      BuildLineSeeds(debug);
 
       if (caloclusters != nullptr) {
         if (debug) { std::cout << "Event::Update(): Clearing previous CaloClusters... " << std::endl; }
@@ -379,6 +341,63 @@ namespace rooutil {
       return select_crv_coincs;
     }
 
+    //-------------------------------------------------
+    // (Re)build the TimeCluster/LineSeed wrappers from the branch vectors they point into. Called
+    // by Update() for every new event, and again after an in-place selection: erasing from a
+    // backing vector invalidates the pointer held by every wrapper into it, including the copies
+    // kept in the named collections, so the wrappers always have to be rebuilt from scratch.
+
+    void BuildTimeClusters(bool debug = false) {
+      if (debug) { std::cout << "Event::BuildTimeClusters(): Clearing previous TimeClusters... " << std::endl; }
+      time_clusters.clear();
+      if (timeclusters != nullptr) {
+        for (int i_cluster = 0; i_cluster < nTimeClusters(); ++i_cluster) {
+          if (debug) { std::cout << "Event::BuildTimeClusters(): Creating TimeCluster " << i_cluster << "... " << std::endl; }
+          TimeCluster time_cluster(&(timeclusters->at(i_cluster))); // passing the addresses of the underlying structs
+          if (timeclustershits != nullptr) { time_cluster.hits = &(timeclustershits->at(i_cluster)); }
+          time_clusters.emplace_back(time_cluster);
+        }
+        // alias the conventional branch into the named collections (its pointer is already
+        // refreshed by ROOT via SetBranchAddress on this->timeclusters)
+        timecluster_branches["timeclusters"] = timeclusters;
+      }
+      for (auto& entry : timecluster_branches) {
+        auto& wrapped = named_time_clusters[entry.first];
+        if (timeclusters != nullptr && entry.second == timeclusters) {
+          wrapped = time_clusters; // reuse the wrappers built above, which also carry the hits pointers
+          continue;
+        }
+        wrapped.clear();
+        if (entry.second != nullptr) {
+          for (auto& tc : *(entry.second)) { wrapped.emplace_back(TimeCluster(&tc)); }
+        }
+      }
+    }
+
+    void BuildLineSeeds(bool debug = false) {
+      if (debug) { std::cout << "Event::BuildLineSeeds(): Clearing previous LineSeeds... " << std::endl; }
+      line_seeds.clear();
+      if (lineseeds != nullptr) {
+        for (int i_seed = 0; i_seed < nLineSeeds(); ++i_seed) {
+          if (debug) { std::cout << "Event::BuildLineSeeds(): Creating LineSeed " << i_seed << "... " << std::endl; }
+          LineSeed line_seed(&(lineseeds->at(i_seed))); // passing the addresses of the underlying structs
+          line_seeds.emplace_back(line_seed);
+        }
+        lineseed_branches["lineseeds"] = lineseeds; // see BuildTimeClusters()
+      }
+      for (auto& entry : lineseed_branches) {
+        auto& wrapped = named_line_seeds[entry.first];
+        if (lineseeds != nullptr && entry.second == lineseeds) {
+          wrapped = line_seeds;
+          continue;
+        }
+        wrapped.clear();
+        if (entry.second != nullptr) {
+          for (auto& ls : *(entry.second)) { wrapped.emplace_back(LineSeed(&ls)); }
+        }
+      }
+    }
+
     const TimeClusters& GetTimeClusters() { return time_clusters; }
     TimeClusters GetTimeClusters(TimeClusterCut cut, bool inplace = false) {
       if (!inplace) { // if we are not changing inplace, then just create a new vector to return
@@ -391,23 +410,28 @@ namespace rooutil {
         return select_time_clusters;
       }
       else {
-        auto newEnd = std::remove_if(time_clusters.begin(), time_clusters.end(), [cut](TimeCluster& time_cluster) { return !cut(time_cluster); });
-
-        std::vector<size_t> time_clusters_to_remove;
-        for (std::vector<TimeCluster>::iterator i_time_cluster = newEnd; i_time_cluster != time_clusters.end(); ++i_time_cluster) { // now need to remove from event
+        if (timeclusters == nullptr) { return time_clusters; } // nothing to select from
+        // Work out which backing entries to keep *before* touching the wrappers: std::remove_if
+        // moves the retained wrappers into the tail it leaves behind, so the tail cannot be used to
+        // identify the rejected entries (for [reject, keep] the tail holds the *kept* one).
+        std::vector<bool> keep_cluster(timeclusters->size(), false);
+        for (auto& time_cluster : time_clusters) {
+          if (!cut(time_cluster)) { continue; }
           for (size_t i_cluster = 0; i_cluster < timeclusters->size(); ++i_cluster) {
-            if (&(timeclusters->at(i_cluster))  == i_time_cluster->timecluster) {
-              time_clusters_to_remove.emplace_back(i_cluster);
-              // flag i_cluster for remoavel
+            if (&(timeclusters->at(i_cluster)) == time_cluster.timecluster) {
+              keep_cluster[i_cluster] = true; // flag i_cluster for keeping
+              break;
             }
           }
         }
-        for (int i_cluster = time_clusters_to_remove.size()-1; i_cluster >= 0; --i_cluster) {
-          timeclusters->erase(timeclusters->begin()+time_clusters_to_remove[i_cluster]);
-          if (timeclustershits) { timeclustershits->erase(timeclustershits->begin()+time_clusters_to_remove[i_cluster]); }
+        // erase back-to-front so the surviving indices (and the addresses the flags were taken at) stay valid
+        for (int i_cluster = static_cast<int>(timeclusters->size())-1; i_cluster >= 0; --i_cluster) {
+          if (keep_cluster[i_cluster]) { continue; }
+          timeclusters->erase(timeclusters->begin()+i_cluster);
+          if (timeclustershits) { timeclustershits->erase(timeclustershits->begin()+i_cluster); }
         }
 
-        time_clusters.erase(newEnd, time_clusters.end()); // remove only rearranges and returns the new end
+        BuildTimeClusters(); // erasing invalidated every wrapper's pointer --> rebuild them all
         return time_clusters;
       }
     }
@@ -424,22 +448,25 @@ namespace rooutil {
         return select_line_seeds;
       }
       else {
-        auto newEnd = std::remove_if(line_seeds.begin(), line_seeds.end(), [cut](LineSeed& line_seed) { return !cut(line_seed); });
-
-        std::vector<size_t> line_seeds_to_remove;
-        for (std::vector<LineSeed>::iterator i_line_seed = newEnd; i_line_seed != line_seeds.end(); ++i_line_seed) { // now need to remove from event
+        if (lineseeds == nullptr) { return line_seeds; } // nothing to select from
+        // See GetTimeClusters() above for why the rejected entries are identified before the
+        // wrappers are touched, rather than from the tail left by std::remove_if.
+        std::vector<bool> keep_seed(lineseeds->size(), false);
+        for (auto& line_seed : line_seeds) {
+          if (!cut(line_seed)) { continue; }
           for (size_t i_seed = 0; i_seed < lineseeds->size(); ++i_seed) {
-            if (&(lineseeds->at(i_seed))  == i_line_seed->lineseed) {
-              line_seeds_to_remove.emplace_back(i_seed);
-              // flag i_seed for remoavel
+            if (&(lineseeds->at(i_seed)) == line_seed.lineseed) {
+              keep_seed[i_seed] = true; // flag i_seed for keeping
+              break;
             }
           }
         }
-        for (int i_seed = line_seeds_to_remove.size()-1; i_seed >= 0; --i_seed) {
-          lineseeds->erase(lineseeds->begin()+line_seeds_to_remove[i_seed]);
+        for (int i_seed = static_cast<int>(lineseeds->size())-1; i_seed >= 0; --i_seed) {
+          if (keep_seed[i_seed]) { continue; }
+          lineseeds->erase(lineseeds->begin()+i_seed);
         }
 
-        line_seeds.erase(newEnd, line_seeds.end()); // remove only rearranges and returns the new end
+        BuildLineSeeds(); // erasing invalidated every wrapper's pointer --> rebuild them all
         return line_seeds;
       }
     }

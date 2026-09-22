@@ -2,6 +2,8 @@
 #define LineSeed_hh_
 
 #include <functional>
+#include <vector>
+
 #include "EventNtuple/inc/LineSeedInfo.hh"
 
 namespace rooutil {
